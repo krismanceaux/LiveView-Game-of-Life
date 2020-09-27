@@ -4,11 +4,10 @@ defmodule GameOfLifeWeb.GameLive do
   alias Components.CellComponent
 
   # TODO: Scrub the cells that don't fit on the grid to prevent memory issues
-  # TODO: Hitting the start button more than once will essentially sart another game on top of the current game, looks like it doubles and triples in speed
-  # TODO: Look into what refreshing the page does to the socket -> does another Life supervisory tree start up in mount/3? I am a little ignorant here...
+
   def mount(_params, _session, socket) do
     Life.Supervisor.start_link()
-    socket = assign(socket, color: "cyan", live_cells: [])
+    socket = assign(socket, color: "cyan", live_cells: [], disabled: "", tref: nil)
     {:ok, socket}
   end
 
@@ -23,9 +22,10 @@ defmodule GameOfLifeWeb.GameLive do
 
     </div>
     <% end %>
-
-    <button phx-click="start_game">Start</button>
-
+    <span>
+      <button phx-click="start_game" <%= @disabled %> >Start</button>
+      <button phx-click="stop_game">> Stop </button>
+    </span>
 
     <style>
       .row{
@@ -87,11 +87,16 @@ defmodule GameOfLifeWeb.GameLive do
   end
 
   def handle_event("start_game", _, socket) do
-    if connected?(socket) do
-      :timer.send_interval(100, self(), :tick)
-    end
+    {:ok, tref} = :timer.send_interval(1000, self(), :tick)
+    updated_socket = assign(socket, disabled: "disabled", tref: tref)
+    {:noreply, updated_socket}
+  end
 
-    {:noreply, socket}
+  def handle_event("stop_game", _, socket) do
+    tref = socket.assigns.tref
+    :timer.cancel(tref)
+    updated_socket = assign(socket, tref: nil, disabled: "")
+    {:noreply, updated_socket}
   end
 
   defp convert_id_to_tuple(id) do
