@@ -3,7 +3,7 @@ defmodule GameOfLifeWeb.GameLive do
 
   alias Components.CellComponent
 
-  # TODO: Scrub the cells that don't fit on the grid to prevent memory issues
+  # MAYBE: Scrub the cells that don't fit on the grid to prevent memory issues
 
   def mount(_params, _session, socket) do
     Life.Supervisor.start_link()
@@ -24,7 +24,8 @@ defmodule GameOfLifeWeb.GameLive do
     <% end %>
     <span>
       <button phx-click="start_game" <%= @disabled %> >Start</button>
-      <button phx-click="stop_game">> Stop </button>
+      <button phx-click="stop_game"> Stop </button>
+      <button phx-click="clear_grid">Clear Grid</button>
     </span>
 
     <style>
@@ -87,7 +88,7 @@ defmodule GameOfLifeWeb.GameLive do
   end
 
   def handle_event("start_game", _, socket) do
-    {:ok, tref} = :timer.send_interval(1000, self(), :tick)
+    {:ok, tref} = :timer.send_interval(200, self(), :tick)
     updated_socket = assign(socket, disabled: "disabled", tref: tref)
     {:noreply, updated_socket}
   end
@@ -96,6 +97,15 @@ defmodule GameOfLifeWeb.GameLive do
     tref = socket.assigns.tref
     :timer.cancel(tref)
     updated_socket = assign(socket, tref: nil, disabled: "")
+    {:noreply, updated_socket}
+  end
+
+  def handle_event("clear_grid", _, socket) do
+    tref = socket.assigns.tref
+    :timer.cancel(tref)
+    live_cells = socket.assigns.live_cells
+    for id <- live_cells, do: send_update(CellComponent, id: id, color: "cyan")
+    updated_socket = assign(socket, tref: nil, disabled: "", live_cells: [])
     {:noreply, updated_socket}
   end
 
