@@ -3,7 +3,11 @@ defmodule GameOfLifeWeb.GameLive do
 
   alias Components.CellComponent
 
+  @refresh_rate 250
+
   # MAYBE: Scrub the cells that don't fit on the grid to prevent memory issues
+  # TODO: consider removing the refresh rate off of the Life.GameServer.run_game/3 or give it a default value to 0.
+  # I think there are issues with synchronizing this with the send_interval function. Lines 76 and 93
 
   def mount(_params, _session, socket) do
     Life.Supervisor.start_link()
@@ -71,16 +75,17 @@ defmodule GameOfLifeWeb.GameLive do
       socket.assigns.live_cells
       |> Enum.map(&convert_id_to_tuple/1)
 
-    next_gen_tuple = Life.GameServer.run_game(live_cells, 10)
+    next_gen_tuple = Life.GameServer.run_game(live_cells)
 
     cells_to_die =
       live_cells
-      |> Enum.flat_map(&if(&1 not in next_gen_tuple, do: [&1], else: []))
+      |> Stream.flat_map(&if(&1 not in next_gen_tuple, do: [&1], else: []))
       |> Enum.map(&convert_tuple_to_id(&1))
 
     next_gen = Enum.map(next_gen_tuple, &convert_tuple_to_id/1)
 
     for id <- cells_to_die, do: send_update(CellComponent, id: id, color: "cyan")
+
     for id <- next_gen, do: send_update(CellComponent, id: id, color: "coral")
 
     socket = assign(socket, live_cells: next_gen)
@@ -88,7 +93,7 @@ defmodule GameOfLifeWeb.GameLive do
   end
 
   def handle_event("start_game", _, socket) do
-    {:ok, tref} = :timer.send_interval(200, self(), :tick)
+    {:ok, tref} = :timer.send_interval(@refresh_rate, self(), :tick)
     updated_socket = assign(socket, disabled: "disabled", tref: tref)
     {:noreply, updated_socket}
   end
