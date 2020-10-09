@@ -7,6 +7,7 @@ defmodule Components.CellComponent do
     """
   end
 
+  # 1-way data flow: send message to this process (will be handled in game_live.ex) letting it know it wants to toggle the color of the cell
   def handle_event("toggle", _, socket) do
     case socket.assigns.color do
       "cyan" -> send(self(), {:toggle, %{socket.assigns | color: "coral"}})

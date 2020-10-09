@@ -8,7 +8,7 @@ defmodule GameOfLife.Application do
   def start(_type, _args) do
     children = [
       # Start the Ecto repository
-      GameOfLife.Repo,
+      # GameOfLife.Repo,
       # Start the Telemetry supervisor
       GameOfLifeWeb.Telemetry,
       # Start the PubSub system

@@ -3,15 +3,14 @@ defmodule GameOfLifeWeb.GameLive do
 
   alias Components.CellComponent
 
-  @refresh_rate 250
+  @refresh_rate 100
 
   # MAYBE: Scrub the cells that don't fit on the grid to prevent memory issues
-  # TODO: consider removing the refresh rate off of the Life.GameServer.run_game/3 or give it a default value to 0.
-  # I think there are issues with synchronizing this with the send_interval function. Lines 76 and 93
+  # need to hold state in only the genserver
 
   def mount(_params, _session, socket) do
     Life.Supervisor.start_link()
-    socket = assign(socket, color: "cyan", live_cells: [], disabled: "", tref: nil)
+    socket = assign(socket, color: "cyan", disabled: "", tref: nil)
     {:ok, socket}
   end
 
@@ -53,28 +52,28 @@ defmodule GameOfLifeWeb.GameLive do
   end
 
   def handle_info({:toggle, cell}, socket) do
+    # 1-way data flow: send update back to child component since the child component is the source of truth for the color
     send_update(CellComponent, id: cell.id, color: cell.color)
 
-    live_cells =
-      case cell.color do
-        "coral" ->
-          [cell.id | socket.assigns.live_cells]
+    # TODO: Instead of storing state in the socket, why not store it in the GenServer and update with each click
+    case cell.color do
+      "coral" ->
+        new_cell = convert_id_to_tuple(cell.id)
+        Life.GameServer.insert_cell(new_cell)
 
-        "cyan" ->
-          socket.assigns.live_cells
-          |> Enum.filter(&(&1 != cell.id))
-      end
+      "cyan" ->
+        dying_cell = convert_id_to_tuple(cell.id)
+        Life.GameServer.remove_cell(dying_cell)
+    end
 
-    updated_socket = assign(socket, live_cells: live_cells)
-
-    {:noreply, updated_socket}
+    {:noreply, socket}
   end
 
   def handle_info(:tick, socket) do
-    live_cells =
-      socket.assigns.live_cells
-      |> Enum.map(&convert_id_to_tuple/1)
+    # TODO: Once we get finish the todo above, we can change this below to getting the live_cells from the genserver vs the socket
+    live_cells = Life.GameServer.get_state()
 
+    # changed this to run the client api function
     next_gen_tuple = Life.GameServer.run_game(live_cells)
 
     cells_to_die =
@@ -88,7 +87,6 @@ defmodule GameOfLifeWeb.GameLive do
 
     for id <- next_gen, do: send_update(CellComponent, id: id, color: "coral")
 
-    socket = assign(socket, live_cells: next_gen)
     {:noreply, socket}
   end
 
@@ -108,9 +106,13 @@ defmodule GameOfLifeWeb.GameLive do
   def handle_event("clear_grid", _, socket) do
     tref = socket.assigns.tref
     :timer.cancel(tref)
-    live_cells = socket.assigns.live_cells
+
+    live_cells =
+      Life.GameServer.get_state()
+      |> Enum.map(&convert_tuple_to_id(&1))
+
     for id <- live_cells, do: send_update(CellComponent, id: id, color: "cyan")
-    updated_socket = assign(socket, tref: nil, disabled: "", live_cells: [])
+    updated_socket = assign(socket, tref: nil, disabled: "")
     {:noreply, updated_socket}
   end
 
